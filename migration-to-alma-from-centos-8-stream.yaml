@@ -1,0 +1,86 @@
+---
+- name: Create online repo and migrate to AlmaLinux 8
+  hosts: all
+  remote_user:  #<-- Replace-with-sudo-user, and use this command "ansible-playbook -i inventory migration-to-alma.yaml --ask-pass --ask-become-pass -vv"
+  become: yes
+  tasks:
+  
+    - name: Remove old repo
+      ansible.builtin.shell: rm -f /etc/yum.repos.d/centos* /etc/yum.repos.d/Centos*
+      when: ansible_os_family == "RedHat"
+
+    - name: Creating the online Repo
+      ansible.builtin.file:
+        path: /etc/yum.repos.d/centos-stream-online-repos.repo
+        state: touch
+        mode: '0644'
+      when: ansible_os_family == "RedHat"
+
+    - name: Add lines to the online repo
+      ansible.builtin.blockinfile:
+        path: /etc/yum.repos.d/centos-stream-online-repos.repo
+        insertafter: EOF
+        block: |
+          [BaseOS-Stream-Online]
+          name=CentOS-$releasever - Base-Stream-Online
+          baseurl=http://archive.kernel.org/centos-vault/8-stream/BaseOS/$basearch/os/
+          gpgcheck=1
+          enabled=1
+          gpgkey=http://archive.kernel.org/centos-vault/8-stream/RPM-GPG-KEY-CentOS-Official
+
+          [AppStream-Stream-Online]
+          name=CentOS-$releasever - AppStream-Stream-Online
+          baseurl=http://archive.kernel.org/centos-vault/8-stream/AppStream/$basearch/os/
+          gpgcheck=1
+          enabled=1
+          gpgkey=http://archive.kernel.org/centos-vault/8-stream/RPM-GPG-KEY-CentOS-Official
+
+          [CentosPlus-Stream-Online]
+          name=CentOS-$releasever - Plus-Stream-Online
+          baseurl=http://archive.kernel.org/centos-vault/8-stream/centosplus/$basearch/os/
+          gpgcheck=1
+          enabled=1
+          gpgkey=http://archive.kernel.org/centos-vault/8-stream/RPM-GPG-KEY-CentOS-Official
+
+          [Extras-Stream-Online]
+          name=CentOS-$releasever - Extras-Stream-Online
+          baseurl=http://archive.kernel.org/centos-vault/8-stream/extras/$basearch/os/
+          gpgcheck=1
+          enabled=1
+          gpgkey=http://archive.kernel.org/centos-vault/8-stream/RPM-GPG-KEY-CentOS-Official
+
+          [PowerTools-Stream-Online]
+          name=CentOS-$releasever - PowerTools-Stream-Online
+          baseurl=http://archive.kernel.org/centos-vault/8-stream/PowerTools/$basearch/os/
+          gpgcheck=1
+          enabled=1
+          gpgkey=http://archive.kernel.org/centos-vault/8-stream/RPM-GPG-KEY-CentOS-Official
+      when: ansible_os_family == "RedHat"
+
+    - name: Show release before Migration
+      ansible.builtin.shell: cat /etc/os-release | grep PRETTY_NAME=
+      when: ansible_os_family == "RedHat"
+
+    - name: Download migration script
+      ansible.builtin.shell: curl -O https://raw.githubusercontent.com/AlmaLinux/almalinux-deploy/master/almalinux-deploy.sh
+      when: ansible_os_family == "RedHat"
+
+    - name: Run migration script
+      ansible.builtin.shell: bash almalinux-deploy.sh -d > /root/migration-out.txt
+      when: ansible_os_family == "RedHat"
+
+    - name: Show Migration result
+      ansible.builtin.shell: cat /root/migration-out.txt | grep "completed"
+      when: ansible_os_family == "RedHat"
+
+    - name: Show release After Migration
+      ansible.builtin.shell: cat /etc/os-release | grep PRETTY_NAME=
+      when: ansible_os_family == "RedHat"
+
+    - name: Remove CentOS repo
+      ansible.builtin.shell: rm -f /etc/yum.repos.d/centos* &&  rm -f /etc/yum.repos.d/Centos*
+      when: ansible_os_family == "RedHat"
+
+    - name: Reboot if migration is successful
+      ansible.builtin.shell: grep -q "completed" /root/migration-out.txt && reboot
+      when: ansible_os_family == "RedHat"
